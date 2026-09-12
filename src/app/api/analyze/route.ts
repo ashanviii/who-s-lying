@@ -18,14 +18,15 @@ export async function POST(req: NextRequest) {
   const input = typeof body.input === "string" ? body.input : "";
 
   if (!isLlmConfigured()) {
-    saveResult(buildDemoResult());
-    return NextResponse.json({ id: DEMO_ID, demo: true });
+    const result = buildDemoResult();
+    saveResult(result);
+    return NextResponse.json({ id: DEMO_ID, demo: true, result });
   }
 
   try {
     const result = await analyzeProfile(input);
     saveResult(result);
-    return NextResponse.json({ id: result.id, demo: false });
+    return NextResponse.json({ id: result.id, demo: false, result });
   } catch (err) {
     if (err instanceof PipelineError) {
       return NextResponse.json({ error: err.message }, { status: err.status });

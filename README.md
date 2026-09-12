@@ -63,12 +63,13 @@ src/
     scoring.ts                  Deterministic Lying Ass Index formula
     fetch-profile.ts            Best-effort URL fetch + input-type detection
     demo.ts                     Fictional demo profile + pre-written result
-    store.ts                    In-memory result store keyed by id
+    store.ts                    Best-effort in-memory result store keyed by id
+    local-result-cache.ts       Browser localStorage cache (see Persistence note below)
     types.ts                    Shared types
 ```
 
 ## Notes & limitations (MVP)
 
 - **LinkedIn scraping**: LinkedIn blocks unauthenticated access to almost all profile pages. When a URL is pasted, the app makes a best-effort fetch and falls back gracefully — the research step's web search can still often find public information about the person/company even when the profile page itself can't be read. For best accuracy, paste the profile's About/Experience text directly instead of just the URL.
-- **Persistence**: results are stored in memory and are lost on server restart. Good enough for a demo/single-instance deployment; add a real database for durable shareable links in production.
+- **Persistence**: `src/lib/store.ts` is an in-memory `Map`, which is only reliable on a single long-running process (e.g. `next start` on a traditional server, or local dev). On serverless platforms (Vercel, etc.) consecutive requests can land on different function instances with separate memory, so the server alone can't guarantee a `/r/[id]` link resolves. To keep "view the analysis I just ran" working regardless of that, the client also caches the full result in `localStorage` the moment it comes back from `/api/analyze` (see `src/lib/local-result-cache.ts`), and the results page checks localStorage first, falling back to the server (`/api/result/[id]`) otherwise. This makes your own results reliable; sharing a link with someone on a different browser/device still depends on the server instance that served it still holding it in memory, which isn't guaranteed on serverless. For durable, truly shareable links in production, swap `store.ts` for a real database (Postgres, Redis/Vercel KV, etc.) — the rest of the app doesn't need to change.
 - **Not a background-check tool**: this is built for entertainment and healthy skepticism, not hiring decisions, harassment, or doxxing. Please use it responsibly.

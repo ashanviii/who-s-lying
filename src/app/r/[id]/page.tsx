@@ -1,29 +1,81 @@
+"use client";
+
 import Link from "next/link";
-import { isLlmConfigured } from "@/lib/llm-client";
-import { getResult } from "@/lib/store";
-import { ClaimCard } from "@/components/ClaimCard";
-import { CopyLinkButton } from "@/components/CopyLinkButton";
-import { DemoBanner } from "@/components/DemoBanner";
-import { Disclaimer } from "@/components/Disclaimer";
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
-import { ScoreGauge } from "@/components/ScoreGauge";
-import type { ClaimStatus } from "@/lib/types";
+import { ResultView } from "@/components/ResultView";
+import { cacheResultLocally, readCachedResult } from "@/lib/local-result-cache";
+import type { AnalysisResult } from "@/lib/types";
 
-const STATUS_ORDER: Record<ClaimStatus, number> = { contradicted: 0, unverified: 1, supported: 2 };
+type LoadState =
+  | { status: "loading" }
+  | { status: "found"; result: AnalysisResult }
+  | { status: "not-found" };
 
-export default async function ResultPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const result = getResult(id);
+export default function ResultPage() {
+  const params = useParams<{ id: string }>();
+  const id = params.id;
+  const [state, setState] = useState<LoadState>(() => {
+    const cached = readCachedResult(id);
+    return cached ? { status: "found", result: cached } : { status: "loading" };
+  });
+  const [noKey, setNoKey] = useState(false);
 
-  if (!result) {
+  useEffect(() => {
+    let cancelled = false;
+    const cached = readCachedResult(id);
+
+    // Always check the server too: it's the source of truth when it has the
+    // result (e.g. someone else's shared link, or a fresh same-instance
+    // view), and confirms whether real analysis is configured server-side.
+    fetch(`/api/result/${id}`)
+      .then(async (res) => {
+        if (cancelled) return;
+        if (res.ok) {
+          const data = await res.json();
+          cacheResultLocally(data.result);
+          setState({ status: "found", result: data.result });
+        } else if (!cached) {
+          setState({ status: "not-found" });
+        }
+      })
+      .catch(() => {
+        if (!cancelled && !cached) setState({ status: "not-found" });
+      });
+
+    fetch("/api/config")
+      .then((res) => res.json())
+      .then((data) => !cancelled && setNoKey(!data.llmConfigured))
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  if (state.status === "loading") {
+    return (
+      <>
+        <Header />
+        <main className="mx-auto w-full max-w-3xl flex-1 px-5 pb-24 pt-10 sm:pt-14">
+          <div className="skeleton h-[420px] rounded-2xl border border-border" />
+        </main>
+        <Footer />
+      </>
+    );
+  }
+
+  if (state.status === "not-found") {
     return (
       <>
         <Header />
         <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center px-5 py-24 text-center">
           <p className="font-display text-2xl font-semibold">This analysis is gone. 👻</p>
           <p className="mt-3 max-w-md text-sm text-muted">
-            Results live in server memory for this MVP and don&apos;t survive a restart or redeploy. Run a new
+            This link doesn&apos;t resolve in this browser or on the server anymore. Results aren&apos;t stored in a
+            database in this demo, so shared links only work reliably in the browser that generated them. Run a new
             analysis to get a fresh link.
           </p>
           <Link
@@ -38,75 +90,11 @@ export default async function ResultPage({ params }: { params: Promise<{ id: str
     );
   }
 
-  const sortedClaims = [...result.claims].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
-  const { counts } = result.score;
-
   return (
     <>
       <Header />
       <main className="mx-auto w-full max-w-3xl flex-1 px-5 pb-24 pt-10 sm:pt-14">
-        {result.demo && (
-          <div className="mb-6">
-            <DemoBanner noKey={!isLlmConfigured()} />
-          </div>
-        )}
-
-        <section className="animate-fade-up flex flex-col items-center gap-6 rounded-2xl border border-border bg-surface p-6 text-center sm:p-10">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-soft">Lying Ass Index</p>
-            <h1 className="mt-1 font-display text-xl font-bold sm:text-2xl">
-              {result.profileName}
-              {result.headline && <span className="block text-sm font-normal text-muted sm:text-base">{result.headline}</span>}
-            </h1>
-          </div>
-
-          <ScoreGauge index={result.score.index} />
-
-          <p className="font-display text-lg font-semibold" style={{ color: "var(--foreground)" }}>
-            {result.score.labelEmoji} {result.score.label}
-          </p>
-          <p className="max-w-lg text-balance text-sm text-muted sm:text-base">{result.overallSummary}</p>
-
-          <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-muted-soft">
-            <span>{result.score.checkablePercent}% of claims were checkable against public sources</span>
-          </div>
-
-          <CopyLinkButton />
-        </section>
-
-        <section className="mt-6">
-          <Disclaimer text={result.disclaimer} />
-        </section>
-
-        {result.sourceNote && (
-          <section className="mt-4 rounded-xl border border-status-warn/30 bg-status-warn/10 p-4 text-xs leading-relaxed text-foreground sm:text-sm">
-            <span className="font-semibold text-status-warn">Heads up: </span>
-            {result.sourceNote}
-          </section>
-        )}
-
-        <section className="mt-10 grid grid-cols-3 gap-3 text-center sm:mt-14">
-          <div className="rounded-xl border border-border bg-surface py-4">
-            <p className="font-display text-2xl font-bold text-status-good">{counts.supported}</p>
-            <p className="mt-1 text-xs text-muted-soft">Supported</p>
-          </div>
-          <div className="rounded-xl border border-border bg-surface py-4">
-            <p className="font-display text-2xl font-bold text-status-warn">{counts.unverified}</p>
-            <p className="mt-1 text-xs text-muted-soft">Unverified</p>
-          </div>
-          <div className="rounded-xl border border-border bg-surface py-4">
-            <p className="font-display text-2xl font-bold text-status-bad">{counts.contradicted}</p>
-            <p className="mt-1 text-xs text-muted-soft">Contradicted</p>
-          </div>
-        </section>
-
-        <section className="mt-8 space-y-3 sm:mt-10">
-          <h2 className="font-display text-lg font-semibold sm:text-xl">Claim-by-claim breakdown</h2>
-          {sortedClaims.map((claim, i) => (
-            <ClaimCard key={claim.id} claim={claim} index={i} />
-          ))}
-        </section>
-
+        <ResultView result={state.result} noKey={noKey} />
         <section className="mt-10 text-center">
           <Link
             href="/"

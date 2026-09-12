@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { LoadingOverlay } from "./LoadingOverlay";
+import { cacheResultLocally } from "@/lib/local-result-cache";
 
 export function ProfileForm() {
   const router = useRouter();
@@ -23,6 +24,9 @@ export function ProfileForm() {
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "Something went wrong. Try again.");
+      }
+      if (data.result) {
+        cacheResultLocally(data.result);
       }
       router.push(`/r/${data.id}`);
     } catch (err) {
