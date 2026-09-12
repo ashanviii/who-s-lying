@@ -1,6 +1,5 @@
 import { nanoid } from "nanoid";
-import type { WebSearchTool20260209 } from "@anthropic-ai/sdk/resources/messages";
-import { runStructured } from "./anthropic-client";
+import { runStructured, WEB_SEARCH_TOOL } from "./llm-client";
 import { detectInputType, fetchUrlContent } from "./fetch-profile";
 import {
   buildExtractionUserPrompt,
@@ -55,8 +54,8 @@ export async function analyzeProfile(rawInput: string): Promise<AnalysisResult> 
     system: EXTRACTION_SYSTEM_PROMPT,
     user: buildExtractionUserPrompt(extractionInput, detected.type),
     schema: extractionSchema,
-    maxTokens: 8000,
-    effort: "medium",
+    schemaName: "profile_claims",
+    reasoningEffort: "low",
   });
 
   if (!extraction.claims || extraction.claims.length === 0) {
@@ -67,19 +66,13 @@ export async function analyzeProfile(rawInput: string): Promise<AnalysisResult> 
 
   const claims = extraction.claims.slice(0, MAX_CLAIMS);
 
-  const webSearchTool: WebSearchTool20260209 = {
-    type: "web_search_20260209",
-    name: "web_search",
-    max_uses: 15,
-  };
-
   const research = await runStructured<ResearchResult>({
     system: RESEARCH_SYSTEM_PROMPT,
     user: buildResearchUserPrompt(extraction.profileName, extraction.headline, claims),
     schema: researchSchema,
-    maxTokens: 16000,
-    effort: "high",
-    extra: { tools: [webSearchTool] },
+    schemaName: "claim_verdicts",
+    reasoningEffort: "medium",
+    tools: [WEB_SEARCH_TOOL],
   });
 
   const scoredClaims: ScoredClaim[] = research.claims.map((c, i) => ({

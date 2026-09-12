@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { isLlmConfigured } from "@/lib/anthropic-client";
+import { isLlmConfigured } from "@/lib/llm-client";
 import { getResult } from "@/lib/store";
 import { ClaimCard } from "@/components/ClaimCard";
 import { CopyLinkButton } from "@/components/CopyLinkButton";

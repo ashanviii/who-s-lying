@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isLlmConfigured, LlmError } from "@/lib/anthropic-client";
+import { isLlmConfigured, LlmError } from "@/lib/llm-client";
 import { buildDemoResult, DEMO_ID } from "@/lib/demo";
 import { analyzeProfile, PipelineError } from "@/lib/pipeline";
 import { saveResult } from "@/lib/store";
