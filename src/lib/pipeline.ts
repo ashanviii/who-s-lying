@@ -55,7 +55,8 @@ export async function analyzeProfile(rawInput: string): Promise<AnalysisResult> 
     user: buildExtractionUserPrompt(extractionInput, detected.type),
     schema: extractionSchema,
     schemaName: "profile_claims",
-    reasoningEffort: "low",
+    reasoningEffort: "medium",
+    tools: [WEB_SEARCH_TOOL],
   });
 
   if (!extraction.claims || extraction.claims.length === 0) {

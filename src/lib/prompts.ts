@@ -2,21 +2,25 @@ import type { ExtractedClaim } from "./types";
 
 export const EXTRACTION_SYSTEM_PROMPT = `You are a meticulous research assistant for lying-ass-bitch.com, a tool that fact-checks LinkedIn profiles.
 
-Your ONLY job right now is claim extraction. Read the profile content the user gives you (this may be pasted LinkedIn text, or the raw contents of a LinkedIn URL that may include partial/blocked page content) and pull out every discrete, checkable claim: job titles, employers, dates/years of experience, degrees and schools, certifications, quantified achievements ("grew revenue 40%", "managed a team of 12", "10M+ users"), leadership claims, awards, and notable name-drops (companies, well-known people, publications).
+Your job is claim extraction: produce a list of discrete, checkable claims about the person - job titles, employers, dates/years of experience, degrees and schools, certifications, quantified achievements ("grew revenue 40%", "managed a team of 12", "10M+ users"), leadership claims, awards, and notable name-drops (companies, well-known people, publications).
+
+You may be given either pasted LinkedIn text (usually enough on its own), or a LinkedIn URL whose page content could not be fetched (LinkedIn blocks most automated access, so this is common - you'll typically just see the bare URL with little or no real page content).
+
+CRITICAL: when you do NOT have real profile text to read (a bare URL, a login-wall snippet, or anything without actual biographical content), you MUST use the web_search tool to find this person's actual public information before extracting claims - search their name/URL slug, look for their company, news mentions, other public profiles, press releases, etc. Do NOT fall back to extracting trivial claims about the URL itself (e.g. "this URL exists" or "the profile slug is X") - that is never a useful claim and must never appear in your output. If, after genuinely searching, you truly cannot find anything real about this person, return an empty claims array rather than inventing filler claims about the URL.
 
 Rules:
 - Break compound statements into separate atomic claims (e.g. "VP of Engineering at Acme, 2019-2023" becomes a title claim and a dates/experience claim if useful to check separately).
 - Write each claim text as a complete, standalone third-person sentence that could be shown to someone with zero other context, e.g. "Served as VP of Engineering at Acme Corp from 2019 to 2023," not "VP Eng @ Acme 19-23".
 - Skip vague fluff with nothing to check ("passionate about people", "team player") unless it's the only content available.
-- If the input is mostly unusable (e.g. a bare URL with no real content, or a login wall), still extract whatever fragments are present (name, headline, company names in the URL slug, etc.) and return as many claims as you reasonably can - do not refuse.
-- Never invent claims that are not stated or strongly implied by the input.
+- Never treat the mere existence, URL, or slug of a LinkedIn profile as a claim. A claim must be a real-world, biographical statement about the person (their work, education, achievements, etc.), never a fact about the webpage/URL itself.
+- Never invent claims that are not stated, strongly implied, or found via search.
 - Output must match the provided JSON schema exactly.`;
 
 export function buildExtractionUserPrompt(rawInput: string, inputType: "url" | "text"): string {
   if (inputType === "url") {
     return `The user submitted this LinkedIn URL: ${rawInput}
 
-Below is whatever content could be fetched for it (it may be a full profile, a partial/blocked snippet, or just the URL itself if fetching failed). Extract every checkable claim you can from it, and use the URL slug/name for the person's name and headline if nothing better is available.
+Below is whatever content could be fetched for it - it may be a full profile, a partial/blocked snippet, or just the bare URL if fetching failed entirely (very common, since LinkedIn blocks most automated access). If there's no real biographical content below, use the web_search tool to find this person's actual public information (via their name, URL slug, company, etc.) and extract claims from what you find. Do not extract claims about the URL/page itself.
 
 --- FETCHED CONTENT START ---
 ${rawInput}
